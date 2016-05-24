@@ -21,7 +21,6 @@ public class Main {
 	
 	public static void loadInvoice (String fname){
 		int nrWierszaIn = 0;
-		// wczytywanie pliku fname 
 		try (	FileInputStream strumienOdczytu = new FileInputStream(new File(fname));
 				XSSFWorkbook workbook = new XSSFWorkbook(strumienOdczytu)	) {		
 			XSSFSheet spreadsheet = workbook.getSheetAt(0);
@@ -33,7 +32,6 @@ public class Main {
 				if (wiersz.getCell(0).getCellType() == Cell.CELL_TYPE_NUMERIC)
 					dodajRozmowe(odczytajRozmowe(wiersz));	
 			}
-			
 		} catch (Exception ex){
 			System.out.println("Problem przy przetwarzaniu faktury, numer wiersza: " + nrWierszaIn);
 			ex.printStackTrace();
@@ -53,9 +51,7 @@ public class Main {
 		komorka = wiersz.getCell(10);
 		String koszt = komorka.getStringCellValue().replace(",", ".");
 		rozmowaTimestamp = formatDaty.parse(formatter.formatCellValue(wiersz.getCell(3)) + " " + formatter.formatCellValue(wiersz.getCell(4)));
-		// public Rozmowa(String nrTelefonu, Date data, String kraj, String typ, 
-		// String opis, String wybranyNumer, String czas, double koszt)
-		
+		// public Rozmowa(String nrTelefonu, Date data, String kraj, String typ, String opis, String wybranyNumer, String czas, double koszt)
 		call = new Rozmowa (
 				formatter.formatCellValue(wiersz.getCell(2)),
 				rozmowaTimestamp,
@@ -105,7 +101,6 @@ public class Main {
 					if (m.find()){
 						// znaleźliśmy użytkownika! Odczytujemy jego dane
 						int numerFirmowy = Integer.parseInt(m.group(1));
-						// System.out.println(numerFirmowy);
 						Pracownik user = danePracownikow.get(numerFirmowy);
 						if(user != null) {
 							// petla zczytująca urlopy, kończy się aż przeczyta komórkę "Razem"			
@@ -116,26 +111,27 @@ public class Main {
 								// jeśli to coś innego, znalazłem jakieś wolne
 								if ((komorka = wiersz.getCell(2)) != null)
 									try {
-									if ((komorka.getCellType() == Cell.CELL_TYPE_STRING) && (komorka.getStringCellValue() != "")) {
-										ciag = komorka.getStringCellValue();
-										if (ciag.matches(".*Razem.*")) {
-											koniec = true;
+										if ((komorka.getCellType() == Cell.CELL_TYPE_STRING) && (komorka.getStringCellValue() != "")) {
+											ciag = komorka.getStringCellValue();
+											if (ciag.matches(".*Razem.*")) {
+												koniec = true;
+											} else {
+												SimpleDateFormat ft = new SimpleDateFormat ("yyyy/MM/dd HH:mm:ss");
+												Date dataStart, dataEnd;
+												// kolejne dwie komórki mają datę rozpoczęcia i zakończenia wolnego
+												komorka = wiersz.getCell(3);
+												dataStart = ft.parse(komorka.getStringCellValue() + " 00:00:00");
+												komorka = wiersz.getCell(4);
+												dataEnd = ft.parse(komorka.getStringCellValue() + " 23:59:59");
+												System.out.println("Pracownik: " + user.getName() + "(" + numerFirmowy + "), " + dataStart + " - " +dataEnd );
+												Wolne urlop = new Wolne(dataStart, dataEnd);
+												user.urlopy.add(urlop);
+											}
 										} else {
-											SimpleDateFormat ft = new SimpleDateFormat ("yyyy/MM/dd HH:mm:ss");
-											Date dataStart, dataEnd;
-											// kolejne dwie komórki mają datę rozpoczęcia i zakończenia wolnego
-											komorka = wiersz.getCell(3);
-											dataStart = ft.parse(komorka.getStringCellValue() + " 00:00:00");
-											komorka = wiersz.getCell(4);
-											dataEnd = ft.parse(komorka.getStringCellValue() + " 23:59:59");
-											System.out.println("Pracownik: " + user.getName() + "(" + numerFirmowy + "), " + dataStart + " - " +dataEnd );
-											Wolne urlop = new Wolne(dataStart, dataEnd);
-											user.urlopy.add(urlop);
-										}
-									} else {
-										System.out.println("Nie mogę rozpoznać wiersza dla pracownika " + numerFirmowy);
-										System.exit(1);
-									} } catch (Exception ex) {
+											System.out.println("Nie mogę rozpoznać wiersza dla pracownika " + numerFirmowy);
+											System.exit(1);
+										} 
+									} catch (Exception ex) {
 										System.out.println("Nr pracownika: " + numerFirmowy);
 										ex.printStackTrace();
 									}				
@@ -144,29 +140,23 @@ public class Main {
 					}		
 				}			
 			}
-
-			
 		} catch (Exception ex){
-			System.out.println("Wczytywanie plik: " + fname);
+			System.out.println("Wczytywanie plik nie powiodło się: " + fname);
 			ex.printStackTrace();
 			System.exit(1);
 		}
-
-		
 	}
 	
 	public static void loadUserList(String fname){
 		XSSFRow wiersz;
 		DataFormatter formatter = new DataFormatter();
 		Iterator<Row> rowIterator = null;
-		int nrWiersza = 0;
 		
 		try (	FileInputStream strumienOdczytu = new FileInputStream(new File(fname));
 				XSSFWorkbook workbook = new XSSFWorkbook(strumienOdczytu)	) {		
 			XSSFSheet spreadsheet = workbook.getSheetAt(0);
 			rowIterator = spreadsheet.iterator();			
 			
-			// pętla zczytująca cały plik
 			while ((wiersz = getMeRow(rowIterator)) != null){
 				String name, numery;
 				int fmno = 0;
@@ -182,10 +172,9 @@ public class Main {
 					while (m.find())
 							user.numery.add(Integer.parseInt(m.group()));
 					}
-				nrWiersza++;
 			}	
 		} catch (Exception ex) {
-			System.out.println("Wczytywanie listy użytkowników, problem w wierszu: " + nrWiersza);
+			System.out.println("Wczytywanie listy użytkowników");
 			ex.printStackTrace();
 			System.exit(1);
 		}
@@ -210,6 +199,7 @@ public class Main {
 		//     wyciągnąć listę jego opłat
 		//     wpisać tą listę do pliku uważając na urlopy
 		//     zapisać podsumowanie
+		
 		verifyOutputFolder("wyniki");
 		List<String> naglowek = generateHeader();
 		
@@ -429,13 +419,14 @@ public class Main {
 					komorka.setCellFormula("SUM(I3:I"+rowId+")");
 					row.setHeight((short)230);
 					
+					// wyliczami wartosci potrzebne do zestawienia i zapisujemy je w danych pracownika
 					pracownik.setTotalCost(suma + pracownik.getTotalCost());
 					pracownik.setPersonalDataCost(sumaDaneZaUrlopy + pracownik.getPersonalDataCost());
 					pracownik.setPersonalCallCost(sumaRozmowyZaUrlopy + pracownik.getPersonalCallCost());
 					pracownik.setDataTransferred(iloscDanychTotal + pracownik.getDataTransferred());
 					pracownik.setDataRoaming(iloscDanychRoaming + pracownik.getDataRoaming());
 					
-					// autosize wszystkich kolumn: maks 196 pikseli * 32p/piksel
+					// autosize wszystkich kolumn
 					for (int i = 0; i< 9; i++) {
 						spreadsheet.autoSizeColumn(i);
 						spreadsheet.setColumnWidth(i,spreadsheet.getColumnWidth(i) + 512);
@@ -443,7 +434,6 @@ public class Main {
 					// a teraz zapisujemy to do pliku
 					try (FileOutputStream out = new FileOutputStream(new File("wyniki\\" + pracownik.getName() +"_"+ numer + ".xlsx"))){
 						workbook.write(out);
-//						System.out.println("Zapisałem plik " + pracownik.getName() + numer + ".xlsx");
 					} catch (Exception ex) {
 						System.out.println("Problem przy zapisie arkusza do pliku: " + pracownik.getName());
 					}
@@ -490,10 +480,6 @@ public class Main {
 		naglowek.add("Wybrany numer");
 		naglowek.add("Czas/kB/N");
 		naglowek.add("Koszt");
-//		naglowek.add("Personal Voice");
-//		naglowek.add("Personal Data");
-//		naglowek.add("Data Total");
-//		naglowek.add("Data Roaming");
 		return naglowek;
 	}
 	

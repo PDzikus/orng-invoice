@@ -1,3 +1,4 @@
+
 import java.util.*;
 import java.util.regex.*;
 import java.io.*;
@@ -85,14 +86,12 @@ public class Main {
 		Cell komorka;
 		String ciag = null;
 		Iterator<Row> rowIterator = null;
-		
 		// wczytywanie pliku fname
 		try (	FileInputStream strumienOdczytu = new FileInputStream(new File(fname));
 				XSSFWorkbook workbook = new XSSFWorkbook(strumienOdczytu)	) 		{	
 			XSSFSheet spreadsheet = workbook.getSheetAt(0);
 			rowIterator = spreadsheet.iterator();			
-			int nrWiersza = 0;
-			
+	
 			// pętla zczytująca cały plik
 			while ((wiersz = getMeRow(rowIterator)) != null){
 				komorka = wiersz.getCell(0);
@@ -102,7 +101,6 @@ public class Main {
 					ciag = komorka.getStringCellValue();
 					Pattern p = Pattern.compile(".+Nr teczki (\\d+)");
 					Matcher m = p.matcher(ciag);
-					
 					// czy wczytany String to użytkownik?
 					if (m.find()){
 						// znaleźliśmy użytkownika! Odczytujemy jego dane
@@ -110,37 +108,37 @@ public class Main {
 						// System.out.println(numerFirmowy);
 						Pracownik user = danePracownikow.get(numerFirmowy);
 						if(user != null) {
-							// System.out.println(user);
-							// pomijam jeden wolny wiersz
-							getMeRow(rowIterator);
-							
 							// petla zczytująca urlopy, kończy się aż przeczyta komórkę "Razem"			
 							boolean koniec = false;
 							while (!koniec){
 								wiersz = getMeRow(rowIterator);
 								// czytam komórkę. jeśli to "Razem" kończę zczytywanie
 								// jeśli to coś innego, znalazłem jakieś wolne
-								komorka = wiersz.getCell(2);
-								if (komorka.getCellType() == Cell.CELL_TYPE_STRING) {
-									ciag = komorka.getStringCellValue();
-									if (ciag.matches(".*Razem.*")) {
-										koniec = true;
+								if ((komorka = wiersz.getCell(2)) != null)
+									try {
+									if ((komorka.getCellType() == Cell.CELL_TYPE_STRING) && (komorka.getStringCellValue() != "")) {
+										ciag = komorka.getStringCellValue();
+										if (ciag.matches(".*Razem.*")) {
+											koniec = true;
+										} else {
+											SimpleDateFormat ft = new SimpleDateFormat ("yyyy/MM/dd HH:mm:ss");
+											Date dataStart, dataEnd;
+											// kolejne dwie komórki mają datę rozpoczęcia i zakończenia wolnego
+											komorka = wiersz.getCell(3);
+											dataStart = ft.parse(komorka.getStringCellValue() + " 00:00:00");
+											komorka = wiersz.getCell(4);
+											dataEnd = ft.parse(komorka.getStringCellValue() + " 23:59:59");
+											System.out.println("Pracownik: " + user.getName() + "(" + numerFirmowy + "), " + dataStart + " - " +dataEnd );
+											Wolne urlop = new Wolne(dataStart, dataEnd);
+											user.urlopy.add(urlop);
+										}
 									} else {
-										SimpleDateFormat ft = new SimpleDateFormat ("yyyy/MM/dd HH:mm:ss");
-										Date dataStart, dataEnd;
-										// kolejne dwie komórki mają datę rozpoczęcia i zakończenia wolnego
-										komorka = wiersz.getCell(3);
-										dataStart = ft.parse(komorka.getStringCellValue() + " 00:00:00");
-										komorka = wiersz.getCell(4);
-										dataEnd = ft.parse(komorka.getStringCellValue() + " 23:59:59");
-										
-										Wolne urlop = new Wolne(dataStart, dataEnd);
-										user.urlopy.add(urlop);
-									}
-								} else {
-									System.out.println("Cos dziwnego w wierszu: " + nrWiersza);
-									System.exit(1);
-								}
+										System.out.println("Nie mogę rozpoznać wiersza dla pracownika " + numerFirmowy);
+										System.exit(1);
+									} } catch (Exception ex) {
+										System.out.println("Nr pracownika: " + numerFirmowy);
+										ex.printStackTrace();
+									}				
 							}
 						}
 					}		
@@ -158,10 +156,6 @@ public class Main {
 	}
 	
 	public static void loadUserList(String fname){
-		// Format plik:
-		// dane zamknięte  w " ", oddzielone znakiem tabulacji
-		// pierwszy wiersz z nagłówkami
-		// FMNO Opis Profil Biuro Numer_Telefonu Mail
 		XSSFRow wiersz;
 		DataFormatter formatter = new DataFormatter();
 		Iterator<Row> rowIterator = null;
@@ -216,30 +210,8 @@ public class Main {
 		//     wyciągnąć listę jego opłat
 		//     wpisać tą listę do pliku uważając na urlopy
 		//     zapisać podsumowanie
-		File katalog = new File ("wyniki");
-		if(!katalog.exists()) {
-			katalog.mkdirs();
-		} else if (!katalog.isDirectory()) {
-			katalog.delete();
-			katalog.mkdirs();
-		}
-		
-		
-		LinkedList<String> naglowek = new LinkedList<>();		
-		naglowek.add("Numer telefonu");
-		naglowek.add("Data");
-		naglowek.add("Godzina");
-		naglowek.add("Kraj");
-		naglowek.add("Typ połączenia");
-		naglowek.add("Opis połączenia");
-		naglowek.add("Wybrany numer");
-		naglowek.add("Czas/kB/N");
-		naglowek.add("Koszt");
-//		naglowek.add("Personal Voice");
-//		naglowek.add("Personal Data");
-//		naglowek.add("Data Total");
-//		naglowek.add("Data Roaming");
-
+		verifyOutputFolder("wyniki");
+		List<String> naglowek = generateHeader();
 		
 		for (Map.Entry<Integer, Pracownik> wpis : danePracownikow.entrySet()) {
 			Pracownik pracownik = wpis.getValue();
@@ -339,17 +311,11 @@ public class Main {
 
 					// tworzymy nowe wiersz i zapisujemy z niego kolejne dane dla danego pracownika
 					System.out.println(pracownik);
-					for (Rozmowa r : lista)	{
+					for (Rozmowa rozmowa : lista)	{
 						
-						boolean czyWolne = false;
-						// sprawdzamy czy to urlop
-						if (pracownik.urlopy != null)
-							for (Wolne urlop : pracownik.urlopy) {
-								if (!((r.data.compareTo(urlop.start) < 0)||(r.data.compareTo(urlop.end) > 0)))
-									czyWolne = true;
 
-							}
-						
+						boolean czyWolne = czyPolaczeniePodczasUrlopu(rozmowa, pracownik);
+						boolean czyCzerwone = !czyTransmisjaDanych(rozmowa) && czyWolne;
 						row = spreadsheet.createRow(rowId);
 
 						Cell komorka;
@@ -357,7 +323,7 @@ public class Main {
 						// dodajemy kolejne kolumny:
 						// numer telefonu
 						komorka = row.createCell(0);
-						if(czyWolne) komorka.setCellStyle(stylREDDaneCenter);
+						if(czyCzerwone) komorka.setCellStyle(stylREDDaneCenter);
 						else
 							komorka.setCellStyle(stylDaneCenter);
 						komorka.setCellValue(numer);
@@ -366,86 +332,88 @@ public class Main {
 						// data
 						komorka = row.createCell(1);
 						DateFormat df = new SimpleDateFormat("MM/dd/yyyy");
-						String data = df.format(r.data);
+						String data = df.format(rozmowa.data);
 						komorka.setCellValue(data);
-						if(czyWolne) komorka.setCellStyle(stylREDDataCenter);
+						if(czyCzerwone) komorka.setCellStyle(stylREDDataCenter);
 						else
 							komorka.setCellStyle(stylDataCenter);
 						
 						// godzina
 						komorka = row.createCell(2);
-						komorka.setCellValue(r.data);
+						komorka.setCellValue(rozmowa.data);
 						df = new SimpleDateFormat("HH:mm:ss");
-						String godzina = df.format(r.data);
+						String godzina = df.format(rozmowa.data);
 						komorka.setCellValue(godzina);
-						if(czyWolne) komorka.setCellStyle(stylREDTimeCenter);
+						if(czyCzerwone) komorka.setCellStyle(stylREDTimeCenter);
 						else
 							komorka.setCellStyle(stylTimeCenter);
 						
 						// kraj
 						komorka = row.createCell(3);
-						komorka.setCellValue(r.kraj);
-						if(czyWolne) komorka.setCellStyle(stylREDDaneCenter);
+						komorka.setCellValue(rozmowa.kraj);
+						if(czyCzerwone) komorka.setCellStyle(stylREDDaneCenter);
 						else
 							komorka.setCellStyle(stylDaneCenter);
 						
 						// rodzaj połączenia
 						komorka = row.createCell(4);
-						komorka.setCellValue(r.typ);
-						if(czyWolne) komorka.setCellStyle(stylREDDaneLeft);
+						komorka.setCellValue(rozmowa.typ);
+						if(czyCzerwone) komorka.setCellStyle(stylREDDaneLeft);
 						else
 							komorka.setCellStyle(stylDaneLeft);
 
 						// opis połączenia
 						komorka = row.createCell(5);
-						if(r.opis != "") komorka.setCellValue(r.opis);
-						else komorka.setCellValue(r.opis);
-						if(czyWolne) komorka.setCellStyle(stylREDDaneLeft);
+						if(rozmowa.opis != "") komorka.setCellValue(rozmowa.opis);
+						else komorka.setCellValue(rozmowa.opis);
+						if(czyCzerwone) komorka.setCellStyle(stylREDDaneLeft);
 						else
 							komorka.setCellStyle(stylDaneLeft);
 						
 						// wybrany numer
 						komorka = row.createCell(6);
-						if (r.wybranyNumer.matches("[\\d]+")) {
-							if(czyWolne) komorka.setCellStyle(stylREDDaneLeft);
+						if (rozmowa.wybranyNumer.matches("[\\d]+")) {
+							if(czyCzerwone) komorka.setCellStyle(stylREDDaneLeft);
 							else komorka.setCellStyle(stylDaneLeft);
 						} else {
-							if(czyWolne) komorka.setCellStyle(stylREDDaneRight);
+							if(czyCzerwone) komorka.setCellStyle(stylREDDaneRight);
 							else komorka.setCellStyle(stylDaneRight);	
 						}
-						komorka.setCellValue(r.wybranyNumer);
+						komorka.setCellValue(rozmowa.wybranyNumer);
 						
 						// czas połączenia albo ilość pobranych danych
 						komorka = row.createCell(7);
-						if (r.czas.matches("[\\d]+")) {							
-							if(czyWolne) komorka.setCellStyle(stylREDLiczbaRight);
+						if (rozmowa.czas.matches("[\\d]+")) {							
+							if(czyCzerwone) komorka.setCellStyle(stylREDLiczbaRight);
 							else komorka.setCellStyle(stylLiczbaRight);
-							komorka.setCellValue(Long.parseLong(r.czas));
+							komorka.setCellValue(Long.parseLong(rozmowa.czas));
 						} else {
-							if(czyWolne) komorka.setCellStyle(stylREDDaneCenter);
+							if(czyCzerwone) komorka.setCellStyle(stylREDDaneCenter);
 							else komorka.setCellStyle(stylDaneCenter);	
-							komorka.setCellValue(r.czas);
+							komorka.setCellValue(rozmowa.czas);
 						}
 						Pattern p = Pattern.compile("(\\d+) kB");
-						Matcher m = p.matcher(r.czas);
+						Matcher m = p.matcher(rozmowa.czas);
 						if(m.find()) {
 							int dane = Integer.parseInt(m.group(1));
 							iloscDanychTotal += dane;
-							if(!r.kraj.matches("Polska")) iloscDanychRoaming += dane;	
+							if(!rozmowa.kraj.matches("Polska")) iloscDanychRoaming += dane;	
 						}
 						
 						
 						// koszt połączenia
 						komorka = row.createCell(8);
-						komorka.setCellValue(r.koszt);
-						if(czyWolne) {
+						komorka.setCellValue(rozmowa.koszt);
+						if(czyCzerwone) {
 							komorka.setCellStyle(stylREDLiczbaCenter);
-							if (r.typ.matches("Przesyłanie.*"))	sumaDaneZaUrlopy += r.koszt;
-							else sumaRozmowyZaUrlopy += r.koszt;
 						}
 						else
 							komorka.setCellStyle(stylLiczbaCenter);
-						suma += r.koszt;
+						if(czyWolne) {
+							if (rozmowa.typ.matches("Przesyłanie.*"))	sumaDaneZaUrlopy += rozmowa.koszt;
+							else sumaRozmowyZaUrlopy += rozmowa.koszt;
+						}
+						suma += rozmowa.koszt;
 						
 						rowId++;	
 						row.setHeight((short)230);
@@ -470,7 +438,7 @@ public class Main {
 					// autosize wszystkich kolumn: maks 196 pikseli * 32p/piksel
 					for (int i = 0; i< 9; i++) {
 						spreadsheet.autoSizeColumn(i);
-						spreadsheet.setColumnWidth(i,Math.min(spreadsheet.getColumnWidth(i) + 512, 6272));
+						spreadsheet.setColumnWidth(i,spreadsheet.getColumnWidth(i) + 512);
 					}
 					// a teraz zapisujemy to do pliku
 					try (FileOutputStream out = new FileOutputStream(new File("wyniki\\" + pracownik.getName() +"_"+ numer + ".xlsx"))){
@@ -484,6 +452,51 @@ public class Main {
 		}
 	}
 
+	private static boolean czyPolaczeniePodczasUrlopu(Rozmowa call, Pracownik pracownik){
+		boolean czyWolne = false;
+		// sprawdzamy czy to urlop
+		if (pracownik.urlopy != null)
+			for (Wolne urlop : pracownik.urlopy) {
+				if (!((call.data.compareTo(urlop.start) < 0)||(call.data.compareTo(urlop.end) > 0)))
+					czyWolne = true;
+		}
+		return czyWolne;
+	}
+	
+	private static boolean czyTransmisjaDanych(Rozmowa call){
+		if (call.czas.matches("\\d+\\skB"))
+			return true;
+		else return false;
+	}
+	
+	private static void verifyOutputFolder(String nazwaKatalogu){
+		File katalog = new File (nazwaKatalogu);
+		if(!katalog.exists()) {
+			katalog.mkdirs();
+		} else if (!katalog.isDirectory()) {
+			katalog.delete();
+			katalog.mkdirs();
+		}
+	}
+	
+	private static List<String> generateHeader(){
+		LinkedList<String> naglowek = new LinkedList<>();		
+		naglowek.add("Numer telefonu");
+		naglowek.add("Data");
+		naglowek.add("Godzina");
+		naglowek.add("Kraj");
+		naglowek.add("Typ połączenia");
+		naglowek.add("Opis połączenia");
+		naglowek.add("Wybrany numer");
+		naglowek.add("Czas/kB/N");
+		naglowek.add("Koszt");
+//		naglowek.add("Personal Voice");
+//		naglowek.add("Personal Data");
+//		naglowek.add("Data Total");
+//		naglowek.add("Data Roaming");
+		return naglowek;
+	}
+	
 	public static void generateSummary(){
 		
 		// przygotuj workbook
@@ -623,6 +636,7 @@ public class Main {
 		
 		System.out.println("Przetwarzam listę urlopową: " + vacation_data);
 		loadVacationData(vacation_data);
+		
 		
 		System.out.println("Przetwarzam fakturę: " + invoice);
 		loadInvoice(invoice);

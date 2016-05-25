@@ -600,7 +600,9 @@ public class Main {
 	}
 	
 	public static void main(String[] args) {
-		
+		// testing UI component
+//		orangeUI ui = new orangeUI();
+//		ui.wyborPlikow();
 		System.out.println("Wczytuję plik z konfiguracją: orangeInvoice.ini");
 		File plikIni = new File ("orangeInvoice.ini");
 		String user_data = "Telefony.txt";
